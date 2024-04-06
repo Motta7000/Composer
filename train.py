@@ -19,15 +19,29 @@ import argparse
 #  Load Keras
 print("Loading keras...")
 import os
-import keras
+import tensorflow as tf
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.utils import plot_model
+import tensorflow.keras.backend as K
+from tensorflow.keras.losses import binary_crossentropy
+from tensorflow.keras.optimizers import Adam, RMSprop
+from tensorflow.keras.optimizers import RMSprop
+from tensorflow.python.keras import backend
 
-print("Keras version: " + keras.__version__)
-
-from keras.models import Model, load_model
-from keras.utils import plot_model
-from keras import backend as K
-from keras.losses import binary_crossentropy
-from keras.optimizers import Adam, RMSprop
+model = None
+# Define input signature
+@tf.function(input_signature=[
+    tf.TensorSpec(shape=(1,120), dtype=tf.float32),  # Assuming the input shape is (None, 96, 96)
+    tf.TensorSpec(shape=(), dtype=tf.bool),  # Learning phase flag
+    tf.TensorSpec(shape=(1,120), dtype=tf.float32) # Model placeholder
+])
+def decoder_function(inputs, learning_phase, model_input):
+    #return model.get_layer('decoder')(inputs, training=learning_phase)
+    if model_input is None:
+        raise ValueError("Model input is None.")
+    model_instance = Model(inputs=model_input.inputs, outputs=model_input.outputs)
+    return model_instance(inputs, training=learning_phase)
+    #return model_input(inputs, training=learning_phase)
 
 EPOCHS_QTY = 2000
 EPOCHS_TO_SAVE = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 250, 300, 350, 400, 450]
@@ -118,9 +132,10 @@ def generate_random_songs(decoder, write_dir, random_vectors):
     :param random_vectors:
     :return:
     """
+    global model
     for i in range(random_vectors.shape[0]):
         random_latent_x = random_vectors[i:i + 1]
-        y_song = decoder([random_latent_x, 0])[0]
+        y_song = decoder_function(random_latent_x, False, model)[0]
         midi_utils.samples_to_midi(y_song[0], write_dir + 'random_vectors' + str(i) + '.mid', 32)
 
 
@@ -155,7 +170,7 @@ def calculate_and_store_pca_statistics(encoder, x_orig, y_orig, write_dir):
     return latent_mean, latent_stds, latent_pca_values, latent_pca_vectors
 
 
-def generate_normalized_random_songs(x_orig, y_orig, encoder, decoder, random_vectors, write_dir):
+def generate_normalized_random_songs(x_orig, y_orig, encoder, decoder_function, random_vectors, write_dir):
     """
     Generate a number of random songs from some normal latent vector samples.
     :param encoder:
@@ -169,7 +184,7 @@ def generate_normalized_random_songs(x_orig, y_orig, encoder, decoder, random_ve
     latent_mean, latent_stds, pca_values, pca_vectors = calculate_and_store_pca_statistics(encoder, x_orig, y_orig, write_dir)
 
     latent_vectors = latent_mean + np.dot(random_vectors * pca_values, pca_vectors)
-    generate_random_songs(decoder, write_dir, latent_vectors)
+    generate_random_songs(decoder_function, write_dir, latent_vectors)
 
     title = ''
     if '/' in write_dir:
@@ -249,7 +264,7 @@ def train(samples_path='data/interim/samples.npy', lengths_path='data/interim/le
     y_test_song = np.copy(y_train[test_ix: test_ix + 1])
     x_test_song = np.copy(x_train[test_ix: test_ix + 1])
     midi_utils.samples_to_midi(y_test_song[0], 'data/interim/gt.mid')
-
+    global model
     #  create model
     if CONTINUE_TRAIN or GENERATE_ONLY:
         print("Loading model...")
@@ -268,10 +283,13 @@ def train(samples_path='data/interim/samples.npy', lengths_path='data/interim/le
                                                 embedding_input_shape=x_shape[1:],
                                                 embedding_shape=x_train.shape[0])
 
+        
         if USE_VAE:
-            model.compile(optimizer=Adam(lr=learning_rate), loss=vae_loss)
+            optimizer = Adam(learning_rate=learning_rate)
+            model.compile(optimizer=optimizer, loss=vae_loss)
         else:
-            model.compile(optimizer=RMSprop(lr=learning_rate), loss='binary_crossentropy')
+            optimizer = RMSprop(learning_rate=learning_rate)
+            model.compile(optimizer=optimizer, loss='binary_crossentropy')
 
         # plot model with graphvis if installed
         try:
@@ -281,7 +299,11 @@ def train(samples_path='data/interim/samples.npy', lengths_path='data/interim/le
 
     #  train
     print("Referencing sub-models...")
-    decoder = K.function([model.get_layer('decoder').input, K.learning_phase()], [model.layers[-1].output])
+    #decoder = tf.function([model.get_layer('decoder').input, backend.symbolic_learning_phase()], [model.layers[-1].output])
+    #decoder = decoder_function(x_train, False,model)
+    #decoder = 0
+    #decoder = decoder_function([model.get_layer('decoder').input, backend.symbolic_learning_phase()], [model.layers[-1].output])
+    #decoder = decoder_function(inputs, learning_phase)
     encoder = Model(inputs=model.input, outputs=model.get_layer('encoder').output)
 
     random_vectors = np.random.normal(0.0, 1.0, (NUM_RAND_SONGS, LATENT_SPACE_SIZE))
@@ -289,7 +311,7 @@ def train(samples_path='data/interim/samples.npy', lengths_path='data/interim/le
 
     if GENERATE_ONLY:
         print("Generating songs...")
-        generate_normalized_random_songs(x_orig, y_orig, encoder, decoder, random_vectors, 'results/')
+        generate_normalized_random_songs(x_orig, y_orig, encoder, decoder_function, random_vectors, 'results/')
         for save_epoch in range(20):
             x_test_song = x_train[save_epoch:save_epoch + 1]
             y_song = model.predict(x_test_song, batch_size=BATCH_SIZE)[0]
@@ -353,7 +375,7 @@ def train(samples_path='data/interim/samples.npy', lengths_path='data/interim/le
             plot_utils.plot_samples(write_dir + 'test', y_song)
             midi_utils.samples_to_midi(y_song, write_dir + 'test.mid')
 
-            generate_normalized_random_songs(x_orig, y_orig, encoder, decoder, random_vectors, write_dir)
+            generate_normalized_random_songs(x_orig, y_orig, encoder, decoder_function, random_vectors, write_dir)
 
     print("...Done.")
 
@@ -372,3 +394,4 @@ if __name__ == "__main__":
     samples_path = args.samples_path
     lengths_path = args.lengths_path
     train(samples_path, lengths_path, epochs_qty, learning_rate)
+

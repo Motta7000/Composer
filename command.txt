@@ -1,0 +1,1 @@
+$env:INCLUDE = "C:\Program Files (x86)\GnuWin32\include\freetype2\freetype;C:\Program Files (x86)\GnuWin32\include\libpng12" + $env:INCLUDE

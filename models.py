@@ -5,11 +5,20 @@
 The models used for music generation.
 """
 
-from keras import backend as K
-from keras.layers import Input, Dense, Activation, Dropout, Flatten, Reshape, TimeDistributed, Lambda
-from keras.layers.embeddings import Embedding
-from keras.layers.normalization import BatchNormalization
-from keras.models import Model
+import tensorflow as tf
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.utils import plot_model
+from tensorflow.keras import backend as K
+from tensorflow.keras.losses import binary_crossentropy
+from tensorflow.keras.optimizers import Adam, RMSprop
+from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import Reshape
+from tensorflow.keras.layers import TimeDistributed
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Flatten
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.layers import Activation
+from tensorflow.keras.layers import Dropout
 
 
 def vae_sampling(args):
