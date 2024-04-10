@@ -18,11 +18,15 @@ def midi_to_samples(file_name, encode_length=False, num_notes=96, samples_per_me
     :param samples_per_measure:
     :return:
     """
+    #In summary, this function takes a MIDI file, processes its tracks to identify notes, and generates a 
+    # sequence of samples where each sample represents a specific point in time and the presence or absence 
+    # of notes. These samples can be further used for various music processing tasks such as training machine 
+    # learning models or analysis.
     has_time_sig = False
     mid = MidiFile(file_name)
 
     ticks_per_beat = mid.ticks_per_beat  # get ticks per beat
-    ticks_per_measure = 4 * ticks_per_beat  # get ticks per measure
+    ticks_per_measure = 4 * ticks_per_beat  # get ticks per measure asumiendo q estamos en 4/4
 
     # detect the time signature of the midi
     for track in mid.tracks:
@@ -46,6 +50,7 @@ def midi_to_samples(file_name, encode_length=False, num_notes=96, samples_per_me
             abs_time += msg.time  # step time forward
 
             # we skip programs 0x70-0x7F which are percussion and sound effects
+            #Si queremos añadir mas instrumentos vamos a tener que modificar esto.
             if msg.type == 'program_change' and msg.program >= 0x70:
                 break
 
@@ -54,7 +59,7 @@ def midi_to_samples(file_name, encode_length=False, num_notes=96, samples_per_me
 
                 # we skip notes without a velocity (basically how strong a note is played to make it sound human)
                 if msg.velocity == 0:
-                    continue
+                    continue #continue no rompe el bucle, break en cambio SI
 
                 # transform the notes into the 96 heights
                 note = msg.note - (128 - num_notes) / 2
@@ -65,8 +70,8 @@ def midi_to_samples(file_name, encode_length=False, num_notes=96, samples_per_me
                 # count the number of played notes per pitch
                 if note not in all_notes:
                     all_notes[note] = []
-                else:
-                    single_note = all_notes[note][-1]
+                else: # nos aseguramos de que las notas q no tienen end time los tengan un tick despues
+                    single_note = all_notes[note][-1] 
                     if len(single_note) == 1:
                         single_note.append(single_note[0] + 1)
 
@@ -125,7 +130,10 @@ def samples_to_midi(samples, file_name, threshold=0.5, num_notes=96, samples_per
     :return:
     """
     # TODO: Encode the certainties of the notes into the volume of the midi for the notes that are above threshold
-
+    
+    #In summary, this function recreates MIDI events (note-on and note-off messages) from the provided samples, 
+    # considering the threshold parameter to determine when a note should start or end. It generates a MIDI 
+    # file containing these events, effectively representing the musical content encoded in the input samples.
     mid = MidiFile()
     track = MidiTrack()
     mid.tracks.append(track)

@@ -16,7 +16,9 @@ def find_sample_range(samples):
     """
 
     # merge all samples
-    merged_sample = np.zeros_like(samples[0])
+    #lo que hace zeroes_like es crear un nuevo vector con la misma SHAPE y DATA TYPE que
+    #samples[0] de esta forma creamos un vector nuevo "Merged_sample" con el mismo formato q samples[0]
+    merged_sample = np.zeros_like(samples[0]) 
     for sample in samples:
         merged_sample = np.maximum(merged_sample, sample)
 

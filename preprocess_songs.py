@@ -14,7 +14,8 @@ import argparse
 
 def preprocess_songs(data_folders):
     """
-    Load and preprocess the songs from the data folders and turn them into a dataset of samples/pitches and lengths of the tones.
+    Load and preprocess the songs from the data folders and turn them into a dataset of 
+    samples/pitches and lengths of the tones.
     :param data_folders:
     :return:
     """

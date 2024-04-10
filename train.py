@@ -31,7 +31,7 @@ from tensorflow.python.keras import backend
 model = None
 # Define input signature
 @tf.function(input_signature=[
-    tf.TensorSpec(shape=(1,120), dtype=tf.float32),  # Assuming the input shape is (None, 96, 96)
+    tf.TensorSpec(shape=(1,120), dtype=tf.float32),  #  para mi es (16 Measures,96 ticks,96 notes)
     tf.TensorSpec(shape=(), dtype=tf.bool),  # Learning phase flag
     tf.TensorSpec(shape=(1,120), dtype=tf.float32) # Model placeholder
 ])
@@ -230,7 +230,7 @@ def train(samples_path='data/interim/samples.npy', lengths_path='data/interim/le
 
     y_samples = np.load(samples_path)
     y_lengths = np.load(lengths_path)
-
+    print("np.shape(y_samples): ",np.shape(y_samples))
     samples_qty = y_samples.shape[0]
     songs_qty = y_lengths.shape[0]
     print("Loaded " + str(samples_qty) + " samples from " + str(songs_qty) + " songs.")
