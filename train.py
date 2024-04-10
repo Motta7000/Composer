@@ -22,26 +22,18 @@ import os
 import tensorflow as tf
 from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.utils import plot_model
-import tensorflow.keras.backend as K
+
+from tensorflow.python.keras import backend as K
 from tensorflow.keras.losses import binary_crossentropy
 from tensorflow.keras.optimizers import Adam, RMSprop
 from tensorflow.keras.optimizers import RMSprop
-from tensorflow.python.keras import backend
 
-model = None
+
+tf.compat.v1.disable_eager_execution()
+
+
 # Define input signature
-@tf.function(input_signature=[
-    tf.TensorSpec(shape=(1,120), dtype=tf.float32),  #  para mi es (16 Measures,96 ticks,96 notes)
-    tf.TensorSpec(shape=(), dtype=tf.bool),  # Learning phase flag
-    tf.TensorSpec(shape=(1,120), dtype=tf.float32) # Model placeholder
-])
-def decoder_function(inputs, learning_phase, model_input):
-    #return model.get_layer('decoder')(inputs, training=learning_phase)
-    if model_input is None:
-        raise ValueError("Model input is None.")
-    model_instance = Model(inputs=model_input.inputs, outputs=model_input.outputs)
-    return model_instance(inputs, training=learning_phase)
-    #return model_input(inputs, training=learning_phase)
+
 
 EPOCHS_QTY = 2000
 EPOCHS_TO_SAVE = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 250, 300, 350, 400, 450]
@@ -132,7 +124,7 @@ def generate_random_songs(decoder, write_dir, random_vectors):
     :param random_vectors:
     :return:
     """
-    global model
+  
     for i in range(random_vectors.shape[0]):
         random_latent_x = random_vectors[i:i + 1]
         y_song = decoder_function(random_latent_x, False, model)[0]
@@ -170,7 +162,7 @@ def calculate_and_store_pca_statistics(encoder, x_orig, y_orig, write_dir):
     return latent_mean, latent_stds, latent_pca_values, latent_pca_vectors
 
 
-def generate_normalized_random_songs(x_orig, y_orig, encoder, decoder_function, random_vectors, write_dir):
+def generate_normalized_random_songs(x_orig, y_orig, encoder, decoder, random_vectors, write_dir):
     """
     Generate a number of random songs from some normal latent vector samples.
     :param encoder:
@@ -184,7 +176,7 @@ def generate_normalized_random_songs(x_orig, y_orig, encoder, decoder_function, 
     latent_mean, latent_stds, pca_values, pca_vectors = calculate_and_store_pca_statistics(encoder, x_orig, y_orig, write_dir)
 
     latent_vectors = latent_mean + np.dot(random_vectors * pca_values, pca_vectors)
-    generate_random_songs(decoder_function, write_dir, latent_vectors)
+    generate_random_songs(decoder, write_dir, latent_vectors)
 
     title = ''
     if '/' in write_dir:
@@ -243,7 +235,7 @@ def train(samples_path='data/interim/samples.npy', lengths_path='data/interim/le
 
     y_shape = (songs_qty * NUM_OFFSETS, MAX_WINDOWS) + y_samples.shape[1:]  # (songs_qty, max number of windows, window pitch qty, window beats per measure)
     y_orig = np.zeros(y_shape, dtype=y_samples.dtype)  # prepare dataset array
-
+    print("y_shape: ", y_shape)
     # fill in measure of songs into input windows for network
     song_start_ix = 0
     song_end_ix = y_lengths[0]
@@ -264,14 +256,23 @@ def train(samples_path='data/interim/samples.npy', lengths_path='data/interim/le
     y_test_song = np.copy(y_train[test_ix: test_ix + 1])
     x_test_song = np.copy(x_train[test_ix: test_ix + 1])
     midi_utils.samples_to_midi(y_test_song[0], 'data/interim/gt.mid')
-    global model
+  
     #  create model
     if CONTINUE_TRAIN or GENERATE_ONLY:
         print("Loading model...")
         model = load_model('results/model.h5')
     else:
         print("Building model...")
-
+        #In the context of the create_autoencoder_model function call where input_shape=y_shape[1:], 
+        # if y_shape is (2, 16, 96, 96), then y_shape[1:] selects a slice of the y_shape 
+        # tuple starting from the second element (index 1) to the end. 
+        # This operation effectively discards the first element of the tuple, which is 2.
+        #Typically, the first dimension of the input data represents the batch size, 
+        # which indicates the number of samples processed in each batch during training or inference.
+        #In many deep learning frameworks like TensorFlow and Keras, the batch size is treated as a 
+        # separate parameter when feeding data into the model and is not included in the input 
+        # shape specification.Therefore, when defining the input shape for the model, we usually exclude the batch
+        # dimension and only specify the shape of individual samples.
         model = models.create_autoencoder_model(input_shape=y_shape[1:],
                                                 latent_space_size=LATENT_SPACE_SIZE,
                                                 dropout_rate=DROPOUT_RATE,
@@ -299,19 +300,26 @@ def train(samples_path='data/interim/samples.npy', lengths_path='data/interim/le
 
     #  train
     print("Referencing sub-models...")
-    #decoder = tf.function([model.get_layer('decoder').input, backend.symbolic_learning_phase()], [model.layers[-1].output])
+    
+   
+    #return model_input(inputs, training=learning_phase)
+    print("model.get_layer('decoder').input: ",model.get_layer('decoder').input)
+    decoder_input = model.get_layer('decoder').input
+    learning_phase = K.learning_phase()
+    decoder_function = K.function([decoder_input, learning_phase], [model.layers[-1].output])
+    #decoder = backend.function([model.get_layer('decoder').input, backend.learning_phase()], [model.layers[-1].output])
     #decoder = decoder_function(x_train, False,model)
     #decoder = 0
     #decoder = decoder_function([model.get_layer('decoder').input, backend.symbolic_learning_phase()], [model.layers[-1].output])
     #decoder = decoder_function(inputs, learning_phase)
     encoder = Model(inputs=model.input, outputs=model.get_layer('encoder').output)
-
+    
     random_vectors = np.random.normal(0.0, 1.0, (NUM_RAND_SONGS, LATENT_SPACE_SIZE))
     np.save('data/interim/random_vectors.npy', random_vectors)
 
     if GENERATE_ONLY:
         print("Generating songs...")
-        generate_normalized_random_songs(x_orig, y_orig, encoder, decoder_function, random_vectors, 'results/')
+        generate_normalized_random_songs(x_orig, y_orig, encoder, decoder, random_vectors, 'results/')
         for save_epoch in range(20):
             x_test_song = x_train[save_epoch:save_epoch + 1]
             y_song = model.predict(x_test_song, batch_size=BATCH_SIZE)[0]
@@ -375,7 +383,7 @@ def train(samples_path='data/interim/samples.npy', lengths_path='data/interim/le
             plot_utils.plot_samples(write_dir + 'test', y_song)
             midi_utils.samples_to_midi(y_song, write_dir + 'test.mid')
 
-            generate_normalized_random_songs(x_orig, y_orig, encoder, decoder_function, random_vectors, write_dir)
+            generate_normalized_random_songs(x_orig, y_orig, encoder, decoder, random_vectors, write_dir)
 
     print("...Done.")
 

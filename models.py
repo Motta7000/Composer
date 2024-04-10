@@ -26,7 +26,7 @@ def vae_sampling(args):
     epsilon = K.random_normal(shape=K.shape(z_mean), mean=0.0, stddev=vae_b1)
     return z_mean + K.exp(z_log_sigma_sq * 0.5) * epsilon
 
-
+#Este autoencoder en la parte del video minuto 3:13 representa el Encoder2 y Decoder2
 def create_autoencoder_model(input_shape, latent_space_size, dropout_rate, max_windows, batchnorm_momentum, use_vae=False, vae_b1=0.02, use_embedding=False, embedding_input_shape=None, embedding_shape=None):
     """
     Create larger autoencoder with the options of making it variational and embedding.
@@ -42,30 +42,31 @@ def create_autoencoder_model(input_shape, latent_space_size, dropout_rate, max_w
     :param embedding_shape:
     :return:
     """
+    print("create_autoencoder_model BEGIN")
     if use_embedding:
         x_in = Input(shape=embedding_input_shape)
         print((None,) + embedding_input_shape)
 
         x = Embedding(embedding_shape, latent_space_size, input_length=1)(x_in)
         x = Flatten(name='encoder')(x)
-    else:
+    else: #EL USE EMBEDDING ESTA PUESTO ES FALSE ASI QUE ESTA ES LA QUE VALE
         x_in = Input(shape=input_shape)
         print((None,) + input_shape)
 
         x = Reshape((input_shape[0], -1))(x_in)
-        print(K.int_shape(x))
+        print("K.int_shape(x): ",K.int_shape(x))
 
         x = TimeDistributed(Dense(2000, activation='relu'))(x)
-        print(K.int_shape(x))
+        print("K.int_shape(x): ",K.int_shape(x))
 
         x = TimeDistributed(Dense(200, activation='relu'))(x)
-        print(K.int_shape(x))
+        print("K.int_shape(x): ",K.int_shape(x))
 
         x = Flatten()(x)
-        print(K.int_shape(x))
+        print("K.int_shape(x): ",K.int_shape(x))
 
         x = Dense(1600, activation='relu')(x)
-        print(K.int_shape(x))
+        print("K.int_shape(x): ",K.int_shape(x))
 
         if use_vae:
             z_mean = Dense(latent_space_size)(x)
@@ -74,7 +75,7 @@ def create_autoencoder_model(input_shape, latent_space_size, dropout_rate, max_w
         else:
             x = Dense(latent_space_size)(x)
             x = BatchNormalization(momentum=batchnorm_momentum, name='encoder')(x)
-    print(K.int_shape(x))
+    print("K.int_shape(x): ",K.int_shape(x))
 
     # LATENT SPACE
 
@@ -83,28 +84,28 @@ def create_autoencoder_model(input_shape, latent_space_size, dropout_rate, max_w
     x = Activation('relu')(x)
     if dropout_rate > 0:
         x = Dropout(dropout_rate)(x)
-    print(K.int_shape(x))
+    print("K.int_shape(x): ",K.int_shape(x))
 
     x = Dense(max_windows * 200)(x)
-    print(K.int_shape(x))
+    print("K.int_shape(x): ",K.int_shape(x))
     x = Reshape((max_windows, 200))(x)
     x = TimeDistributed(BatchNormalization(momentum=batchnorm_momentum))(x)
     x = Activation('relu')(x)
     if dropout_rate > 0:
         x = Dropout(dropout_rate)(x)
-    print(K.int_shape(x))
+    print("K.int_shape(x): ",K.int_shape(x))
 
     x = TimeDistributed(Dense(2000))(x)
     x = TimeDistributed(BatchNormalization(momentum=batchnorm_momentum))(x)
     x = Activation('relu')(x)
     if dropout_rate > 0:
         x = Dropout(dropout_rate)(x)
-    print(K.int_shape(x))
+    print("K.int_shape(x): ",K.int_shape(x))
 
     x = TimeDistributed(Dense(input_shape[1] * input_shape[2], activation='sigmoid'))(x)
-    print(K.int_shape(x))
+    print("K.int_shape(x): ",K.int_shape(x))
     x = Reshape((input_shape[0], input_shape[1], input_shape[2]))(x)
-    print(K.int_shape(x))
+    print("K.int_shape(x): ",K.int_shape(x))
 
     model = Model(x_in, x)
 
